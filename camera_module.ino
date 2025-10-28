@@ -11,7 +11,7 @@
 #define API_KEY "AIzaSyBgR79fzzSvRGC7eDGIpm3R_3AVsrnnKcg"
 #define DATABASE_URL "https://smart-trashbin-4c1d0-default-rtdb.asia-southeast1.firebasedatabase.app/"
 
-const char* classifierEndpoint = "https://your-classifier.example.com/classify"; // replace
+const char* classifierEndpoint = "https://example.com/classify"; 
 
 FirebaseData fbdo;
 FirebaseAuth auth;
@@ -56,7 +56,7 @@ config.pin_pwdn = PWDN_GPIO_NUM;
 config.pin_reset = RESET_GPIO_NUM;
 config.xclk_freq_hz = 20000000;
 config.pixel_format = PIXFORMAT_JPEG;
-config.frame_size = FRAMESIZE_QVGA; // QVGA or lower recommended to keep image small
+config.frame_size = FRAMESIZE_QVGA; 
 config.jpeg_quality = 12; // 0-63 lower is better quality (bigger size)
 config.fb_count = 1;
 
@@ -86,13 +86,13 @@ String tail = "\r\n--" + boundary + "--\r\n";
 int contentLength = head.length() + len + tail.length();
 http.addHeader("Content-Length", String(contentLength));
 
-int ret = http.sendRequest("POST", (uint8_t*)NULL, 0); // start request
+int ret = http.sendRequest("POST", (uint8_t*)NULL, 0); 
 WiFiClient * stream = http.getStreamPtr();
 stream->print(head);
 stream->write(buf, len);
 stream->print(tail);
 
-int httpCode = http.GET(); // actually send/finish — some servers require different handling
+int httpCode = http.GET(); 
 
 String label = "";
 if (httpCode == HTTP_CODE_OK) {
@@ -150,8 +150,7 @@ Serial.println("Camera initialized");
 }
 
 void loop() {
-// Wait for a trigger: you can use a proximity sensor, or poll a push button, or run continuously.
-// For simplicity here we capture every 8 seconds but in real system you'd trigger when an object is detected.
+
 camera_fb_t * fb = esp_camera_fb_get();
 if (!fb) {
 Serial.println("Camera capture failed");
@@ -168,5 +167,5 @@ if (label.length() == 0) label = "unknown";
 uploadLabelToFirebase(label);
 
 esp_camera_fb_return(fb);
-delay(8000); // wait before next capture (adjust as needed)
+delay(8000); 
 }
