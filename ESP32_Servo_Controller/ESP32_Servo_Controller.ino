@@ -3,8 +3,8 @@
 #include <ESP32Servo.h>
 
 // ===== CONFIG =====
-#define WIFI_SSID "Joasher"
-#define WIFI_PASSWORD "01051014"
+#define WIFI_SSID "*******"
+#define WIFI_PASSWORD "********"
 const char *FIREBASE_ROOT = "https://smart-trashbin-4c1d0-default-rtdb.asia-southeast1.firebasedatabase.app";
 const char *FIREBASE_AUTH = "";
 
