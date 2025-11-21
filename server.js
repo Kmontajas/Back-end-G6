@@ -10,7 +10,7 @@ import alertRoutes from "./routes/alert.js";
 import classificationRoutes from "./routes/classification.js";
 import binHistoryRoutes from "./routes/bin-history.js";
 import maintenanceRoutes from "./routes/maintenance.js";
-import userRoutes from "./routes/user.js";
+import userRoutes from "./routes/user.js"; 
 
 dotenv.config();
 
@@ -45,4 +45,5 @@ app.use((req, res) => {
 
 // Start server
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, "0.0.0.0", () => console.log(`🚀 API server running on http://192.168.1.37:${PORT}`));
+app.listen(PORT, "0.0.0.0", () => console.log(`🚀 API server running on http://localhost:${PORT}`));
+
