@@ -10,8 +10,8 @@
 #include "C:\Users\admin\Documents\Arduino\libraries\TensorFlowLite_ESP32\src\tensorflow\lite\version.h"
 
 // CONFIG
-#define WIFI_SSID "********"
-#define WIFI_PASSWORD "**********"
+#define WIFI_SSID "Joasher"
+#define WIFI_PASSWORD "01051014"
 const char* FIREBASE_ROOT = "https://smart-trashbin-4c1d0-default-rtdb.asia-southeast1.firebasedatabase.app";
 const char* FIREBASE_AUTH = ""; // empty in test mode
 
@@ -36,11 +36,10 @@ const int IMG_CH = 3;
 #define HREF_GPIO_NUM     23
 #define PCLK_GPIO_NUM     22
 
-constexpr int kTensorArenaSize = 80 * 1024;
+constexpr int kTensorArenaSize = 20 * 1024;
 static uint8_t tensor_arena[kTensorArenaSize];
 
 using namespace tflite;
-const unsigned char* model_data = g_model_data;
 const tflite::Model* model = nullptr;
 tflite::MicroInterpreter* interpreter = nullptr;
 TfLiteTensor* input_tensor = nullptr;
@@ -87,7 +86,7 @@ void setup() {
   setupCamera();
 
   // TFLM init
-  model = tflite::GetModel(model_data);
+  model = tflite::GetModel(g_model_data);
   if (model->version() != TFLITE_SCHEMA_VERSION) {
     Serial.println("Model schema mismatch!");
     while(1);

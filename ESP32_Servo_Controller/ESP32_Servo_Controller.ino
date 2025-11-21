@@ -2,9 +2,9 @@
 #include <HTTPClient.h>
 #include <ESP32Servo.h>
 
-// CONFIG
-#define WIFI_SSID "*********"
-#define WIFI_PASSWORD "*********"
+// ===== CONFIG =====
+#define WIFI_SSID "Joasher"
+#define WIFI_PASSWORD "01051014"
 const char *FIREBASE_ROOT = "https://smart-trashbin-4c1d0-default-rtdb.asia-southeast1.firebasedatabase.app";
 const char *FIREBASE_AUTH = "";
 
@@ -23,17 +23,17 @@ const char *FIREBASE_AUTH = "";
 #define TRIG_NON 15
 #define ECHO_NON 2
 
-// Settings
+// ===== Settings =====
 const int FULL_DISTANCE_CM = 10;    // measured distance considered full (measured from top)
 const int EMPTY_DISTANCE_CM = 50;   // far distance considered empty
 const unsigned long POLL_INTERVAL_MS = 2000; // poll Firebase every 2s
 
-// Globals
+// ===== Globals =====
 Servo servoRec, servoBio, servoNon;
 String lastLabel = "";
 unsigned long lastPoll = 0;
 
-// Helpers
+// ===== Helpers =====
 float readDistance(int trigPin, int echoPin) {
   digitalWrite(trigPin, LOW);
   delayMicroseconds(2);
