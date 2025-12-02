@@ -1,0 +1,36 @@
+{
+    "rules": {
+      ".read": false,
+      ".write": false,
+  
+      "classification": {
+        ".read": true,
+        ".write": true
+      },
+  
+      "bins": {
+        "$bin_type": {
+          ".read": true,
+          ".write": true,
+          "fillLevel": { ".validate": "newData.isNumber()" },
+          "status": { ".validate": "newData.isString()" }
+        }
+      },
+  
+      "alerts": {
+        "$bin_type": {
+          ".read": true,
+          ".write": true,
+          ".validate": "newData.child('time').isNumber()"
+        }
+      },
+  
+      "users": {
+        "$uid": {
+          ".read": "auth != null && auth.uid == $uid",
+          ".write": "auth != null && auth.uid == $uid"
+        }
+      }
+    }
+  }
+  
