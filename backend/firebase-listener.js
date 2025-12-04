@@ -3,60 +3,46 @@ import Bin from "./models/bin.js";
 import Classification from "./models/classification.js";
 import Alert from "./models/alert.js";
 
-// Firebase initialization
+// ===== Firebase Initialization =====
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert("./serviceAccountKey.json"),
     databaseURL: "https://smart-trashbin-4c1d0-default-rtdb.asia-southeast1.firebasedatabase.app/"
   });
 }
-
 const db = admin.database();
 
 // ===== CONFIG =====
 const validBinTypes = ["recyclable", "biodegradable", "non_biodegradable"];
-const FULL_THRESHOLD_DISTANCE = 10; // cm
-const EMPTY_DISTANCE = 40;           // cm
+const FULL_THRESHOLD_DISTANCE = 5; // cm
+const FULL_DETECTION_MS = 2000;    // 2 seconds threshold
+const EMPTY_DISTANCE_CM = 15;      // must match ESP32
 
+// ===== GLOBALS =====
 const previousBinStates = {};
 const fullDetectionTimers = {};
 
 // ===== HELPERS =====
 const calculateFillPercentage = (distance) => {
-  if (distance >= EMPTY_DISTANCE) return 0;
+  if (distance >= EMPTY_DISTANCE_CM) return 0;
   if (distance <= 0) return 100;
-  const percentage = (1 - distance / EMPTY_DISTANCE) * 100;
-  return Math.min(Math.max(percentage, 0), 100);
+  return Math.min(Math.max((1 - distance / EMPTY_DISTANCE_CM) * 100, 0), 100);
 };
 
 const normalizeBinData = (binId, binData) => {
   if (!binData) binData = {};
 
-  let distance = EMPTY_DISTANCE;
-  let fill_level = 0;
-
-  // Determine fill_level correctly 
-  if (binData.distance !== undefined) {
-    distance = Number(binData.distance);
-    fill_level = calculateFillPercentage(distance);
-  } else if (binData.distance_cm !== undefined) {
-    distance = Number(binData.distance_cm);
-    fill_level = calculateFillPercentage(distance);
-  } else if (binData.fill_level !== undefined) {
-    fill_level = Number(binData.fill_level); // Use Firebase value directly
-    // Optionally, estimate distance for FULL detection
-    distance = EMPTY_DISTANCE * (1 - fill_level / 100);
-  } else {
-    fill_level = 0;
-  }
-
-  const status = fill_level >= 100 || distance <= FULL_THRESHOLD_DISTANCE ? "FULL" : "OK";
+  // Use Firebase data if provided, fallback to calculation
+  let distance = Number(binData.distance_cm ?? binData.distance ?? EMPTY_DISTANCE_CM);
+  let fill_level = Number(binData.fill_level ?? calculateFillPercentage(distance));
+  let status = binData.status ?? "OK";
 
   return {
     binId,
     type: binId,
     distance_cm: distance,
     fill_level,
+    fill_level_percent: fill_level,
     status,
     last_update: new Date(),
     isDeleted: false
@@ -67,65 +53,103 @@ const normalizeBinData = (binId, binData) => {
 const createFullAlertIfNeeded = async (bin) => {
   if (bin.status !== "FULL") return false;
   try {
-    const existingAlert = await Alert.findOne({ bin_id: bin._id, alert_type: "FULL", resolved: false });
+    const existingAlert = await Alert.findOne({
+      bin_id: bin._id,
+      alert_type: "FULL",
+      resolved: false
+    });
+
     if (!existingAlert) {
+      const distance = Number(bin.distance_cm ?? 0).toFixed(1);
+      const fill = Number(bin.fill_level ?? 0);
+
       const alert = new Alert({
         bin_id: bin._id,
         bin_type: bin.type,
         alert_type: "FULL",
-        distance_cm: bin.distance_cm,
-        fill_level: bin.fill_level,
+        distance_cm: distance,
+        fill_level: fill,
         timestamp: new Date(),
-        message: `Bin ${bin.type} is FULL! Distance: ${bin.distance_cm.toFixed(1)}cm`
+        message: `Bin ${bin.type} is FULL! Distance: ${distance}cm`
       });
+
       await alert.save();
       console.log(`🚨 ALERT created for ${bin.type}`);
       return true;
     }
     return false;
+
   } catch (err) {
     console.error(`❌ Error creating alert for ${bin.type}:`, err);
     return false;
   }
 };
-
-// ===== UPSERT BIN =====
+// ===== 
+//  BIN =====
+// ===== UPSERT BIN (sync with Firebase directly) =====
+// ===== UPSERT BIN (mirror Firebase exactly) =====
+// ===== UPSERT BIN (mirror Firebase safely) =====
 const upsertBin = async (binId, binData) => {
   if (!validBinTypes.includes(binId)) return;
 
   try {
-    const normalizedBin = normalizeBinData(binId, binData);
+    if (!binData) binData = {};
 
-    // 2-second FULL detection
-    if (normalizedBin.distance_cm <= FULL_THRESHOLD_DISTANCE) {
-      if (!fullDetectionTimers[binId]) fullDetectionTimers[binId] = Date.now();
-      else if (Date.now() - fullDetectionTimers[binId] >= 2000) normalizedBin.status = "FULL";
-      else normalizedBin.status = "OK";
-    } else {
-      delete fullDetectionTimers[binId];
-      normalizedBin.status = "OK";
-    }
+    // Read values directly from Firebase with defaults
+    const distance = Number(binData.fill_level ?? binData.distance_cm ?? 0);      // optional raw distance
+    const fill_level_percent = Number(binData.fill_level_percent ?? 0);           // use ESP32-provided percent
+    const status = binData.status ?? "OK";                                        // use ESP32-provided status
+
+    // Prepare normalized bin object
+    const normalizedBin = {
+      binId,
+      type: binId,
+      distance_cm: distance,
+      fill_level: fill_level_percent,          // store percent in MongoDB
+      fill_level_percent: fill_level_percent,
+      status,
+      last_update: new Date(),
+      isDeleted: false
+    };
 
     const previousState = previousBinStates[binId];
     previousBinStates[binId] = { ...normalizedBin };
 
-    const updatedBin = await Bin.findOneAndUpdate({ binId }, normalizedBin, { upsert: true, new: true });
-    console.log(`✅ ${binId}: ${updatedBin.fill_level.toFixed(2)}% - ${updatedBin.status}`);
+    // Upsert MongoDB safely
+    const updatedBin = await Bin.findOneAndUpdate(
+      { binId },
+      normalizedBin,
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
 
-    if (updatedBin.status === "FULL") await createFullAlertIfNeeded(updatedBin);
+    if (!updatedBin) {
+      console.warn(`⚠️ Upsert returned null for ${binId}`);
+      return;
+    }
+
+    // Safely log values
+    const fillPercentLog = updatedBin.fill_level_percent ?? 0;
+    const statusLog = updatedBin.status ?? "OK";
+    console.log(`✅ ${binId}: ${fillPercentLog.toFixed(1)}% - ${statusLog}`);
+
+    // Create alert if status is FULL
+    if (statusLog === "FULL") await createFullAlertIfNeeded(updatedBin);
 
     // Resolve previous FULL alerts if status changed
-    if (previousState && previousState.status === "FULL" && updatedBin.status === "OK") {
+    if (previousState && previousState.status === "FULL" && statusLog !== "FULL") {
       await Alert.updateMany(
         { bin_id: updatedBin._id, alert_type: "FULL", resolved: false },
         { resolved: true, resolved_at: new Date() }
       );
       console.log(`✅ ${binId} FULL alerts resolved`);
     }
+
   } catch (err) {
     console.error(`❌ Error upserting ${binId}:`, err);
   }
 };
+
+
 
 // ===== INITIAL LOAD =====
 const loadAllBins = async () => {
@@ -146,36 +170,37 @@ const loadAllBins = async () => {
   }
 };
 
-// ===== LISTENERS =====
+// ===== BIN LISTENERS =====
 const lastBinValues = {};
+// ===== REAL-TIME BIN LISTENER =====
 const startBinListeners = () => {
   console.log("👂 Listening for bin changes...");
 
   validBinTypes.forEach(binId => {
     const ref = db.ref(`/bins/${binId}`);
+
     const listener = async snapshot => {
       try {
         const binData = snapshot.val();
         if (!binData) return;
 
+        // Optional: stringify to detect duplicate updates
         const newDataString = JSON.stringify(binData);
-        if (lastBinValues[binId] === newDataString) return;
+        if (lastBinValues[binId] === newDataString) return; // skip if unchanged
         lastBinValues[binId] = newDataString;
 
+        // Upsert into MongoDB
         await upsertBin(binId, binData);
+
       } catch (err) {
         console.error(`❌ Listener error for ${binId}:`, err);
       }
     };
 
     ref.on("value", listener);
-
-    // Reconnect on disconnect
-    ref.onDisconnect().cancel(err => {
-      if (err) console.error(`❌ onDisconnect cancel error for ${binId}:`, err);
-    });
   });
 };
+
 
 // ===== CLASSIFICATION LISTENER =====
 db.ref("/classification/latest").on("value", async snapshot => {
@@ -202,7 +227,7 @@ db.ref("/classification/latest").on("value", async snapshot => {
   }
 });
 
-// ===== START =====
+// ===== START SERVER =====
 console.log("🚀 Firebase listener starting...");
-console.log(`📏 FULL: ≤${FULL_THRESHOLD_DISTANCE}cm for 2 seconds`);
+console.log(`📏 FULL: ≤${FULL_THRESHOLD_DISTANCE}cm for ${FULL_DETECTION_MS / 1000}s`);
 loadAllBins();
